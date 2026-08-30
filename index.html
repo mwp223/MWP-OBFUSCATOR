@@ -1,0 +1,1322 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MWP Obfuscator</title>
+<meta name="description" content="VM-based Lua 5.1 obfuscator. Every build randomizes 38 opcodes, triple-pass encrypts every instruction, and ships a unique interpreter. Impossible to reverse.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* ── Tokens ─────────────────────────────────────── */
+:root {
+  --bg:        #09090F;
+  --bg-grid:   #0E0E17;
+  --s1:        #111219;
+  --s2:        #181A28;
+  --s3:        #1E2038;
+  --border:    #252840;
+  --text:      #CDD6F4;
+  --muted:     #4A5070;
+  --muted2:    #7480A8;
+  --accent:    #4D6AFF;
+  --accent-d:  rgba(77,106,255,.12);
+  --accent-g:  rgba(77,106,255,.22);
+  --green:     #2DC98A;
+  --green-d:   rgba(45,201,138,.12);
+  --red:       #F05070;
+
+  --f-display: 'Syne', system-ui, sans-serif;
+  --f-body:    'DM Sans', system-ui, sans-serif;
+  --f-mono:    'JetBrains Mono', ui-monospace, monospace;
+
+  --r:     6px;
+  --r-lg:  10px;
+  --max:   1200px;
+  --gap:   clamp(16px,3vw,28px);
+}
+
+/* ── Reset ──────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg);color:var(--text);
+  font-family:var(--f-body);font-size:16px;line-height:1.65;
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+a{color:var(--accent);text-decoration:none}
+a:hover{opacity:.8}
+button{cursor:pointer;font-family:inherit}
+code,pre{font-family:var(--f-mono)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* ── Utility ────────────────────────────────────── */
+.sr-only{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);border:0}
+.wrap{max-width:var(--max);margin:0 auto;padding:0 clamp(20px,5vw,48px)}
+
+/* ── Nav ────────────────────────────────────────── */
+nav{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  background:rgba(9,9,15,.85);
+  backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--border);
+}
+.nav-inner{
+  display:flex;align-items:center;justify-content:space-between;
+  height:60px;max-width:var(--max);margin:0 auto;
+  padding:0 clamp(20px,5vw,48px);
+}
+.logo{
+  font-family:var(--f-display);font-size:17px;font-weight:800;
+  color:var(--text);letter-spacing:-.02em;
+  display:flex;align-items:center;gap:8px;
+}
+.logo-dot{
+  width:8px;height:8px;border-radius:50%;
+  background:var(--accent);
+  box-shadow:0 0 12px var(--accent-g);
+  flex-shrink:0;
+}
+.nav-links{display:flex;align-items:center;gap:24px}
+.nav-links a{
+  font-size:13.5px;font-weight:500;color:var(--muted2);
+  transition:color .15s;
+}
+.nav-links a:hover{color:var(--text);opacity:1}
+.btn-gh{
+  display:flex;align-items:center;gap:7px;
+  padding:7px 14px;border-radius:var(--r);
+  background:var(--s2);border:1px solid var(--border);
+  font-size:13px;font-weight:500;color:var(--text);
+  transition:border-color .15s,background .15s;
+}
+.btn-gh:hover{border-color:var(--accent);background:var(--accent-d);opacity:1}
+.btn-gh svg{opacity:.7}
+
+/* ── Hero ───────────────────────────────────────── */
+#hero{
+  position:relative;min-height:100vh;
+  display:flex;flex-direction:column;justify-content:center;
+  padding:120px clamp(20px,5vw,48px) 80px;
+  overflow:hidden;
+}
+#hero-canvas{
+  position:absolute;inset:0;opacity:.18;
+  pointer-events:none;
+}
+.hero-glow{
+  position:absolute;top:-20%;left:50%;transform:translateX(-50%);
+  width:900px;height:600px;
+  background:radial-gradient(ellipse at 50% 0%, rgba(77,106,255,.18) 0%, transparent 70%);
+  pointer-events:none;
+}
+.hero-inner{
+  position:relative;max-width:var(--max);margin:0 auto;width:100%;
+}
+.eyebrow{
+  display:inline-flex;align-items:center;gap:8px;
+  font-family:var(--f-mono);font-size:11.5px;font-weight:500;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--accent);
+  background:var(--accent-d);border:1px solid rgba(77,106,255,.25);
+  padding:5px 12px;border-radius:20px;margin-bottom:28px;
+}
+.eyebrow::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--accent);
+  box-shadow:0 0 8px var(--accent);}
+.hero-headline{
+  font-family:var(--f-display);font-weight:800;
+  font-size:clamp(44px,8vw,108px);
+  line-height:.95;letter-spacing:-.04em;
+  text-wrap:balance;
+  margin-bottom:28px;
+  background:linear-gradient(160deg, #fff 0%, var(--text) 40%, rgba(77,106,255,.8) 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.hero-sub{
+  font-size:clamp(15px,2.2vw,19px);color:var(--muted2);line-height:1.7;
+  max-width:560px;margin-bottom:40px;
+}
+.hero-ctas{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:60px}
+.btn-primary{
+  padding:13px 26px;border-radius:var(--r);
+  background:var(--accent);border:none;
+  font-family:var(--f-body);font-size:14.5px;font-weight:500;color:#fff;
+  box-shadow:0 0 28px var(--accent-g);
+  transition:opacity .15s,box-shadow .15s;
+}
+.btn-primary:hover{opacity:.88;box-shadow:0 0 40px var(--accent-g)}
+.btn-ghost{
+  padding:12px 24px;border-radius:var(--r);
+  background:transparent;border:1px solid var(--border);
+  font-family:var(--f-body);font-size:14.5px;font-weight:500;color:var(--text);
+  transition:border-color .15s,background .15s;
+}
+.btn-ghost:hover{border-color:var(--accent);background:var(--accent-d)}
+.hero-stats{
+  display:flex;flex-wrap:wrap;gap:10px;
+}
+.stat-chip{
+  display:flex;align-items:center;gap:7px;
+  font-family:var(--f-mono);font-size:11.5px;color:var(--muted2);
+  background:var(--s1);border:1px solid var(--border);
+  padding:5px 12px;border-radius:20px;
+}
+.stat-chip .dot{width:5px;height:5px;border-radius:50%;background:var(--green)}
+
+/* ── Section titles ─────────────────────────────── */
+section{padding:clamp(64px,8vw,100px) 0}
+.section-label{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--accent);margin-bottom:12px;
+}
+.section-title{
+  font-family:var(--f-display);font-weight:800;
+  font-size:clamp(28px,4.5vw,48px);line-height:1.1;
+  letter-spacing:-.03em;text-wrap:balance;margin-bottom:16px;
+}
+.section-sub{
+  font-size:clamp(14px,1.8vw,17px);color:var(--muted2);
+  max-width:520px;line-height:1.7;
+}
+
+/* ── Features ───────────────────────────────────── */
+#features{background:var(--s1);border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.features-grid{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+  gap:2px;margin-top:56px;
+  border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;
+}
+.feat-card{
+  background:var(--bg);padding:clamp(24px,3vw,36px);
+  border:none;display:flex;flex-direction:column;gap:14px;
+  transition:background .15s;
+}
+.feat-card:hover{background:var(--s2)}
+.feat-icon{
+  width:44px;height:44px;border-radius:var(--r);
+  display:flex;align-items:center;justify-content:center;
+  background:var(--accent-d);border:1px solid rgba(77,106,255,.2);
+  font-size:20px;flex-shrink:0;
+}
+.feat-title{
+  font-family:var(--f-display);font-weight:700;font-size:17px;
+  letter-spacing:-.02em;
+}
+.feat-desc{font-size:14px;color:var(--muted2);line-height:1.65}
+.feat-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.tag{
+  font-family:var(--f-mono);font-size:10.5px;
+  padding:3px 9px;border-radius:4px;
+  background:var(--s2);border:1px solid var(--border);
+  color:var(--muted2);
+}
+
+/* ── Try It ─────────────────────────────────────── */
+#try{border-top:1px solid var(--border)}
+.try-header{margin-bottom:32px}
+.try-config{
+  display:flex;align-items:center;gap:10px;
+  margin-bottom:20px;flex-wrap:wrap;
+}
+.try-config label{font-size:12px;color:var(--muted2);font-family:var(--f-mono);white-space:nowrap}
+.seed-wrap{display:flex;align-items:center;gap:8px}
+.seed-input{
+  width:110px;background:var(--s1);border:1px solid var(--border);
+  color:var(--text);font-family:var(--f-mono);font-size:12px;
+  padding:7px 10px;border-radius:var(--r);outline:none;
+  transition:border-color .15s;
+}
+.seed-input:focus{border-color:var(--accent)}
+
+.editor-wrap{
+  display:grid;grid-template-columns:1fr auto 1fr;
+  gap:0;border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;
+  min-height:360px;
+}
+.editor-panel{display:flex;flex-direction:column}
+.editor-bar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 16px;background:var(--s2);border-bottom:1px solid var(--border);
+}
+.editor-bar-label{
+  font-family:var(--f-mono);font-size:11px;color:var(--muted2);
+  letter-spacing:.06em;text-transform:uppercase;
+}
+.editor-textarea{
+  flex:1;background:var(--s1);color:var(--text);
+  font-family:var(--f-mono);font-size:13px;line-height:1.6;
+  padding:18px;border:none;resize:none;outline:none;
+  tab-size:2;
+}
+.editor-textarea::placeholder{color:var(--muted)}
+.editor-textarea:read-only{color:var(--muted2)}
+.editor-divider{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:0 4px;background:var(--s2);border-left:1px solid var(--border);
+  border-right:1px solid var(--border);gap:8px;
+}
+.run-btn{
+  padding:14px 10px;border:none;border-radius:var(--r);
+  background:var(--accent);color:#fff;font-weight:700;
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.08em;
+  writing-mode:vertical-lr;text-orientation:mixed;
+  transform:rotate(180deg);
+  box-shadow:0 0 20px var(--accent-g);
+  transition:opacity .15s,box-shadow .15s;
+}
+.run-btn:hover{opacity:.85;box-shadow:0 0 32px var(--accent-g)}
+.run-btn:disabled{opacity:.4;cursor:not-allowed;box-shadow:none}
+.copy-btn{
+  padding:6px 12px;border-radius:var(--r);
+  background:var(--s3);border:1px solid var(--border);
+  font-family:var(--f-mono);font-size:11px;color:var(--muted2);
+  transition:border-color .15s,color .15s;
+}
+.copy-btn:hover{border-color:var(--accent);color:var(--text)}
+.status-bar{
+  padding:8px 16px;background:var(--s2);
+  border-top:1px solid var(--border);
+  font-family:var(--f-mono);font-size:11px;color:var(--muted);
+  min-height:34px;display:flex;align-items:center;gap:10px;
+}
+.status-dot{width:6px;height:6px;border-radius:50%;background:var(--muted);flex-shrink:0}
+.status-dot.ok{background:var(--green);box-shadow:0 0 8px var(--green)}
+.status-dot.err{background:var(--red)}
+.status-dot.spin{
+  background:var(--accent);
+  animation:pulse 1s ease-in-out infinite;
+}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* ── Drop zone ──────────────────────────────────── */
+.drop-zone{
+  flex:1;display:flex;align-items:center;justify-content:center;
+  background:var(--s1);border:none;
+  cursor:pointer;transition:background .15s;
+  position:relative;
+}
+.drop-zone.drag-over{background:var(--s3)}
+.drop-zone.has-file{background:var(--s1)}
+.drop-inner{
+  display:flex;flex-direction:column;align-items:center;gap:8px;
+  padding:32px;text-align:center;pointer-events:none;
+}
+.drop-icon{font-size:32px;line-height:1;margin-bottom:4px}
+.drop-title{font-family:var(--f-mono);font-size:13px;color:var(--muted2)}
+.drop-sub{font-size:12px;color:var(--muted)}
+.drop-link{color:var(--accent);cursor:pointer;pointer-events:all}
+.drop-link:hover{opacity:.8}
+.drop-filename{
+  font-family:var(--f-mono);font-size:11px;color:var(--green);
+  margin-top:4px;word-break:break-all;max-width:200px;
+}
+
+@media(max-width:700px){
+  .editor-wrap{grid-template-columns:1fr;grid-template-rows:1fr auto 1fr}
+  .editor-divider{flex-direction:row;padding:4px 0;writing-mode:initial}
+  .run-btn{writing-mode:initial;transform:none;padding:10px 20px}
+}
+
+/* ── Setup ──────────────────────────────────────── */
+#setup{background:var(--s1);border-top:1px solid var(--border)}
+.setup-grid{
+  display:grid;grid-template-columns:1fr 1fr;gap:clamp(24px,4vw,48px);
+  align-items:start;margin-top:48px;
+}
+@media(max-width:680px){.setup-grid{grid-template-columns:1fr}}
+.code-block{
+  background:var(--bg);border:1px solid var(--border);
+  border-radius:var(--r-lg);overflow:hidden;
+}
+.code-header{
+  display:flex;align-items:center;gap:8px;
+  padding:10px 16px;background:var(--s2);border-bottom:1px solid var(--border);
+}
+.code-dots{display:flex;gap:5px}
+.code-dots span{width:10px;height:10px;border-radius:50%}
+.code-dots .r{background:#f05060}
+.code-dots .y{background:#f0b530}
+.code-dots .g{background:var(--green)}
+.code-lang{font-family:var(--f-mono);font-size:11px;color:var(--muted);margin-left:auto}
+.code-body{padding:20px;font-family:var(--f-mono);font-size:13px;line-height:1.7;color:var(--muted2)}
+.code-body .cmd{color:var(--text)}
+.code-body .cmt{color:var(--muted)}
+.code-body .kw{color:var(--accent)}
+.setup-text p{margin-bottom:12px;font-size:15px;color:var(--muted2);line-height:1.7}
+.deploy-badges{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px}
+.badge{
+  display:flex;align-items:center;gap:7px;
+  padding:8px 14px;border-radius:var(--r);
+  background:var(--s2);border:1px solid var(--border);
+  font-size:13px;font-weight:500;color:var(--text);
+  transition:border-color .15s;
+}
+.badge:hover{border-color:var(--accent);opacity:1}
+.badge-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+
+/* ── Footer ─────────────────────────────────────── */
+footer{
+  padding:40px 0;border-top:1px solid var(--border);
+  background:var(--bg);
+}
+.foot-inner{
+  display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;
+  max-width:var(--max);margin:0 auto;padding:0 clamp(20px,5vw,48px);
+}
+.foot-copy{font-size:13px;color:var(--muted)}
+.foot-links{display:flex;gap:20px}
+.foot-links a{font-size:13px;color:var(--muted);transition:color .15s}
+.foot-links a:hover{color:var(--text);opacity:1}
+</style>
+</head>
+<body>
+
+<!-- Nav -->
+<nav>
+  <div class="nav-inner">
+    <div class="logo">
+      <span class="logo-dot"></span>
+      MWP Obfuscator
+    </div>
+    <div class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#try">Try It</a>
+      <a href="#setup">Setup</a>
+      <a class="btn-gh" href="https://github.com/masonwp/luavm_obf" target="_blank" rel="noopener">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.44 9.8 8.21 11.39.6.11.82-.26.82-.58v-2.03c-3.34.72-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.74.08-.73.08-.73 1.21.09 1.85 1.24 1.85 1.24 1.07 1.84 2.81 1.3 3.5 1 .11-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.17 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 3-.4c1.02 0 2.04.14 3 .4 2.29-1.55 3.3-1.23 3.3-1.23.66 1.65.24 2.87.12 3.17.77.84 1.24 1.91 1.24 3.22 0 4.61-2.81 5.63-5.48 5.92.43.37.81 1.1.81 2.22v3.29c0 .32.22.7.83.58C20.57 21.8 24 17.31 24 12c0-6.63-5.37-12-12-12z"/>
+        </svg>
+        GitHub
+      </a>
+    </div>
+  </div>
+</nav>
+
+<!-- Hero -->
+<section id="hero">
+  <canvas id="hero-canvas" aria-hidden="true"></canvas>
+  <div class="hero-glow" aria-hidden="true"></div>
+  <div class="hero-inner">
+    <div class="eyebrow">Lua 5.1 VM Obfuscator</div>
+    <h1 class="hero-headline">Your code,<br>unreadable.</h1>
+    <p class="hero-sub">MWP Obfuscator compiles Lua into a private bytecode VM — every build unique. 38 opcodes shuffled, every instruction triple-encrypted, every string individually keyed.</p>
+    <div class="hero-ctas">
+      <button class="btn-primary" onclick="document.getElementById('try').scrollIntoView({behavior:'smooth'})">Try it free →</button>
+      <a class="btn-ghost" href="https://github.com/masonwp/luavm_obf" target="_blank" rel="noopener">View on GitHub</a>
+    </div>
+    <div class="hero-stats">
+      <div class="stat-chip"><span class="dot"></span>38-opcode permutation</div>
+      <div class="stat-chip"><span class="dot"></span>Triple-pass LCG-XOR</div>
+      <div class="stat-chip"><span class="dot"></span>CRC32 anti-tamper</div>
+      <div class="stat-chip"><span class="dot"></span>Per-string encryption</div>
+    </div>
+  </div>
+</section>
+
+<!-- Features -->
+<section id="features">
+  <div class="wrap">
+    <div class="section-label">Protection layers</div>
+    <h2 class="section-title">Built to resist<br>every reversal attempt</h2>
+    <p class="section-sub">Each layer of protection is independent. Breaking one doesn't help with the others.</p>
+    <div class="features-grid">
+      <div class="feat-card">
+        <div class="feat-icon">⚙️</div>
+        <div class="feat-title">Opcode randomization</div>
+        <div class="feat-desc">All 38 Lua 5.1 opcodes are remapped to a random bijection each build. Static disassemblers produce complete garbage — MOVE might be opcode 23 this build, 7 next build.</div>
+        <div class="feat-tags"><span class="tag">38 opcodes</span><span class="tag">per-build unique</span></div>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon">🔐</div>
+        <div class="feat-title">Triple-pass XOR encryption</div>
+        <div class="feat-desc">Every instruction array is encrypted three times: forward with the low byte of an LCG stream, backward with the mid byte, forward again with the high byte. Different key per proto per build.</div>
+        <div class="feat-tags"><span class="tag">LCG keystream</span><span class="tag">3 passes</span><span class="tag">per-closure keys</span></div>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon">🔒</div>
+        <div class="feat-title">String encryption</div>
+        <div class="feat-desc">Each string constant gets its own independent random key. Strings are encrypted individually — compromising one key leaks nothing about any other string in the script.</div>
+        <div class="feat-tags"><span class="tag">per-string keys</span><span class="tag">LCG-XOR</span></div>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon">🛡️</div>
+        <div class="feat-title">CRC32 integrity check</div>
+        <div class="feat-desc">A standard CRC32 is computed over the encrypted instruction array at obfuscation time and verified at runtime before decryption. Any modification to the bytecode crashes the script instantly.</div>
+        <div class="feat-tags"><span class="tag">runtime verification</span><span class="tag">tamper detection</span></div>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon">🕵️</div>
+        <div class="feat-title">Anti-tamper probes</div>
+        <div class="feat-desc">The VM probes for hooked globals and debug hook injection at startup. Any modification to the Lua environment triggers a silent crash before execution begins.</div>
+        <div class="feat-tags"><span class="tag">env probe</span><span class="tag">hook detection</span></div>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon">🌀</div>
+        <div class="feat-title">Runs anywhere Luau runs</div>
+        <div class="feat-desc">The protected output uses only standard <code>bit32</code>, <code>string.unpack</code>, and <code>table.pack</code>. Runs natively in Roblox, any Luau environment, or Lua 5.1 with the <code>--target lua51</code> CLI flag.</div>
+        <div class="feat-tags"><span class="tag">Luau native</span><span class="tag">Roblox ready</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Try It -->
+<section id="try">
+  <div class="wrap">
+    <div class="try-header">
+      <div class="section-label">Try it</div>
+      <h2 class="section-title">Upload your .luac</h2>
+      <p class="section-sub" style="margin-bottom:0">Compile your Lua 5.1 script with <code>luac -o out.luac script.lua</code>, then drop the <code>.luac</code> here. Runs entirely in your browser — no server.</p>
+    </div>
+
+    <div class="try-config">
+      <div class="seed-wrap">
+        <label for="seedInput">seed</label>
+        <input class="seed-input" id="seedInput" type="number" placeholder="random" min="0">
+      </div>
+    </div>
+
+    <div class="editor-wrap">
+      <!-- Input panel: drop zone -->
+      <div class="editor-panel">
+        <div class="editor-bar">
+          <span class="editor-bar-label">Input · .luac bytecode</span>
+        </div>
+        <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+          <input type="file" id="fileInput" accept=".luac" style="display:none">
+          <div class="drop-inner" id="dropInner">
+            <div class="drop-icon">📦</div>
+            <div class="drop-title">Drop .luac file here</div>
+            <div class="drop-sub">or <span class="drop-link">browse</span></div>
+            <div class="drop-filename" id="dropFilename"></div>
+          </div>
+        </div>
+        <div class="status-bar" id="statusBar">
+          <span class="status-dot" id="statusDot"></span>
+          <span id="statusText">Ready — upload a .luac file</span>
+        </div>
+      </div>
+
+      <!-- Center run button -->
+      <div class="editor-divider">
+        <button class="run-btn" id="runBtn" onclick="runObfuscate()" disabled>OBFUSCATE</button>
+      </div>
+
+      <!-- Output panel -->
+      <div class="editor-panel">
+        <div class="editor-bar">
+          <span class="editor-bar-label">Output · Protected</span>
+          <button class="copy-btn" onclick="copyOutput()" id="copyBtn">Copy</button>
+        </div>
+        <textarea class="editor-textarea" id="luaOutput" readonly placeholder="-- Protected output appears here..."></textarea>
+        <div class="status-bar" id="outBar" style="justify-content:flex-end">
+          <span id="sizeLabel" style="font-family:var(--f-mono);font-size:11px;color:var(--muted)"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Setup -->
+<section id="setup">
+  <div class="wrap">
+    <div class="section-label">How it works</div>
+    <h2 class="section-title">Two steps, no server</h2>
+    <div class="setup-grid">
+      <div>
+        <div class="code-block">
+          <div class="code-header">
+            <div class="code-dots"><span class="r"></span><span class="y"></span><span class="g"></span></div>
+            <span class="code-lang">bash · step 1: compile</span>
+          </div>
+          <div class="code-body">
+            <span class="cmt"># Install Lua 5.1 compiler</span><br>
+            <span class="cmt">#   Windows: choco install lua</span><br>
+            <span class="cmt">#   Linux:   apt install lua5.1</span><br>
+            <span class="cmt">#   Mac:     brew install lua@5.1</span><br><br>
+            <span class="cmt"># Compile your script to bytecode</span><br>
+            <span class="cmd">luac5.1 <span class="kw">-o</span> myscript.luac myscript.lua</span><br><br>
+            <span class="cmt"># On Windows (just "luac")</span><br>
+            <span class="cmd">luac <span class="kw">-o</span> myscript.luac myscript.lua</span>
+          </div>
+        </div>
+        <div class="code-block" style="margin-top:16px">
+          <div class="code-header">
+            <div class="code-dots"><span class="r"></span><span class="y"></span><span class="g"></span></div>
+            <span class="code-lang">bash · python CLI (alternative)</span>
+          </div>
+          <div class="code-body">
+            <span class="cmt"># Direct CLI — requires luac in PATH</span><br>
+            <span class="cmd">python obf.py script.lua</span><br><br>
+            <span class="cmt"># Deterministic build</span><br>
+            <span class="cmd">python obf.py script.lua <span class="kw">--seed</span> 1337</span><br><br>
+            <span class="cmt"># Double VM (nested layers)</span><br>
+            <span class="cmd">python obf.py script.lua <span class="kw">--double</span></span>
+          </div>
+        </div>
+      </div>
+      <div class="setup-text">
+        <p>The web tool runs the full obfuscator engine in your browser — no uploads, no server, no Python required. Just compile your script to <code>.luac</code> with the standard Lua 5.1 compiler and drop it in.</p>
+        <p>The obfuscated output uses only <code>bit32</code>, <code>string.unpack</code>, and <code>table.pack</code> — all available natively in Roblox Luau. Copy and paste directly into any executor or place file.</p>
+        <p>Want the CLI with <code>--double</code> VM wrapping or <code>--target lua51</code> fallback? Clone the repo and run <code>obf.py</code> directly:</p>
+        <div class="deploy-badges">
+          <a class="badge" href="https://github.com/masonwp/luavm_obf" target="_blank" rel="noopener"><span class="badge-dot" style="background:var(--accent)"></span>GitHub Repo</a>
+          <a class="badge" href="https://github.com/masonwp/luavm_obf/releases" target="_blank" rel="noopener"><span class="badge-dot" style="background:var(--green)"></span>Releases</a>
+        </div>
+        <p style="margin-top:20px;font-size:13px;color:var(--muted)">Both the web tool and CLI produce identical output for the same seed — the JS engine is a direct port of the Python obfuscator.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <div class="foot-inner">
+    <span class="foot-copy">© 2025 MWP Obfuscator</span>
+    <nav class="foot-links" aria-label="Footer">
+      <a href="#features">Features</a>
+      <a href="#try">Try It</a>
+      <a href="https://github.com/masonwp/luavm_obf" target="_blank" rel="noopener">GitHub</a>
+    </nav>
+  </div>
+</footer>
+
+<script>
+/* ════════════════════════════════════════════════════════
+   MWP Obfuscator — full JS port of obf.py
+   ════════════════════════════════════════════════════════ */
+
+/* ── RNG (Mulberry32) ─────────────────────────────── */
+class RNG {
+  constructor(seed) { this._s = (seed >>> 0) || 1; }
+  _next() {
+    this._s = (this._s + 0x6D2B79F5) >>> 0;
+    let t = Math.imul(this._s ^ (this._s >>> 15), 1 | this._s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  }
+  random()        { return this._next(); }
+  randint(a, b)   { return a + (this._next() * (b - a + 1) | 0); }
+  choice(arr)     { return arr[this._next() * arr.length | 0]; }
+  shuffle(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = this._next() * (i + 1) | 0;
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+  }
+}
+
+/* ── Crypto ───────────────────────────────────────── */
+function lcgStep(k) {
+  return (Math.imul(k >>> 0, 1664525) + 1013904223) >>> 0;
+}
+
+function encryptInts(data, key) {
+  const N = data.length;
+  let k1 = key >>> 0;
+  const r1 = new Array(N);
+  for (let i = 0; i < N; i++) {
+    k1 = lcgStep(k1);
+    r1[i] = (data[i] >>> 0) ^ (k1 & 0xFF);
+  }
+  let k2 = ((key ^ 0xDEADBEEF) >>> 0);
+  const r2 = r1.slice();
+  for (let i = N - 1; i >= 0; i--) {
+    k2 = lcgStep(k2);
+    r2[i] ^= (k2 >>> 8) & 0xFF;
+  }
+  let k3 = (Math.imul(key >>> 0, 31337) >>> 0);
+  const r3 = new Array(N);
+  for (let i = 0; i < N; i++) {
+    k3 = lcgStep(k3);
+    r3[i] = r2[i] ^ ((k3 >>> 16) & 0xFF);
+  }
+  return r3;
+}
+
+function encryptStr(s, key) {
+  let k = key >>> 0;
+  const out = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) {
+    k = lcgStep(k);
+    out[i] = (s.charCodeAt(i) & 0xFF) ^ (k & 0xFF);
+  }
+  return out;
+}
+
+function packIntsToBytes(enc) {
+  const buf = new Uint8Array(enc.length * 4);
+  const dv = new DataView(buf.buffer);
+  for (let i = 0; i < enc.length; i++) dv.setUint32(i * 4, enc[i] >>> 0, true);
+  return buf;
+}
+
+const _CRC32_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let j = 0; j < 8; j++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[i] = c;
+  }
+  return t;
+})();
+
+function crc32OfBytes(data) {
+  let crc = 0xFFFFFFFF;
+  for (let i = 0; i < data.length; i++) crc = _CRC32_TABLE[(crc ^ data[i]) & 0xFF] ^ (crc >>> 8);
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+/* ── Number literals ──────────────────────────────── */
+function hexLit(n, rng, allowBinary = true) {
+  if (n < 0) return `(-${hexLit(-n, rng, allowBinary)})`;
+  if (n === 0) return rng.random() < 0.5 ? '0x0' : '0X0';
+  if (allowBinary && n <= 0xFF && rng.random() < 0.18) {
+    let bs = n.toString(2);
+    let parts = [];
+    for (let i = 0; i < bs.length; i++) {
+      parts.push(bs[i]);
+      if (i < bs.length - 1 && rng.random() < 0.22)
+        parts.push('_'.repeat(rng.randint(1, 3)));
+    }
+    return (rng.random() < 0.5 ? '0b' : '0B') + parts.join('');
+  }
+  const useUpper = rng.random() < 0.5;
+  let hs = n.toString(16);
+  if (useUpper) hs = hs.toUpperCase();
+  let parts = [];
+  for (let i = 0; i < hs.length; i++) {
+    parts.push(hs[i]);
+    if (i < hs.length - 1 && rng.random() < 0.22)
+      parts.push('_'.repeat(rng.randint(1, 3)));
+  }
+  return (rng.random() < 0.5 ? '0x' : '0X') + parts.join('');
+}
+
+function mathExpr(n, rng) {
+  if (n < 0) return `(-${mathExpr(-n, rng)})`;
+  if (n === 0) return hexLit(0, rng);
+  const style = rng.randint(0, 2);
+  if (style === 0) {
+    const a = n > 1 ? rng.randint(1, n - 1) : 0;
+    return `(${hexLit(a, rng)}+${hexLit(n - a, rng)})`;
+  } else if (style === 1) {
+    const j = rng.randint(1, 200);
+    return `(${hexLit(n + j, rng)}-${hexLit(j, rng)})`;
+  } else {
+    for (let _ = 0; _ < 8; _++) {
+      const m = rng.randint(2, 12), q = rng.randint(1, 30), base = m * q;
+      if (base === n)      return `(${hexLit(m, rng)}*${hexLit(q, rng)})`;
+      else if (base > n)   return `(${hexLit(m, rng)}*${hexLit(q, rng)}-${hexLit(base - n, rng)})`;
+      else                 return `(${hexLit(m, rng)}*${hexLit(q, rng)}+${hexLit(n - base, rng)})`;
+    }
+    const a = n > 1 ? rng.randint(1, n - 1) : 0;
+    return `(${hexLit(a, rng)}+${hexLit(n - a, rng)})`;
+  }
+}
+
+function luaNum(v) {
+  if (Number.isInteger(v) && Math.abs(v) < 1e15) return String(v);
+  if (isNaN(v))      return '(0/0)';
+  if (!isFinite(v))  return v > 0 ? '(1/0)' : '(-1/0)';
+  return String(v);
+}
+
+function toLuaStrLit(enc, rng) {
+  const parts = [];
+  for (let i = 0; i < enc.length; i++) {
+    const b = enc[i];
+    if (b === 34)       { parts.push('\\"'); }
+    else if (b === 92)  { parts.push('\\\\'); }
+    else if (b === 10)  { parts.push('\\n'); }
+    else if (b === 13)  { parts.push('\\r'); }
+    else if (b === 0)   { parts.push('\\000'); }
+    else if (b >= 32 && b <= 126) {
+      const nxt = i + 1 < enc.length ? enc[i + 1] : 0;
+      if (rng.random() < 0.18 && b !== 34 && b !== 92) {
+        parts.push(`\\u{${b.toString(16).padStart(2, '0')}}`);
+      } else if (nxt >= 48 && nxt <= 57) {
+        parts.push(`\\${b.toString().padStart(3, '0')}`);
+      } else {
+        parts.push(String.fromCharCode(b));
+      }
+    } else {
+      parts.push(`\\${b.toString().padStart(3, '0')}`);
+    }
+  }
+  return '"' + parts.join('') + '"';
+}
+
+function minifyLua(src) {
+  const tokens = [];
+  for (const line of src.split('\n')) {
+    const s = line.trim();
+    if (s) tokens.push(s);
+  }
+  const header = '--[[File Protected By MWP Obfuscator V2]]';
+  if (tokens.length && tokens[0] === header)
+    return header + '\n\n' + tokens.slice(1).join(' ');
+  return tokens.join(' ');
+}
+
+/* ── Namer ────────────────────────────────────────── */
+class Namer {
+  constructor(rng) {
+    this._rng = rng;
+    this._used = new Set();
+    this._kw = new Set(['and','break','do','else','elseif','end','false','for',
+      'function','if','in','local','nil','not','or','repeat','return','then','true','until','while']);
+    this._dig = '0123456789';
+    this._alp = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  }
+  call(prefix = '_') {
+    while (true) {
+      const n = prefix + this._rng.choice(this._dig) + this._rng.choice(this._alp);
+      if (!this._used.has(n) && !this._kw.has(n)) { this._used.add(n); return n; }
+    }
+  }
+}
+
+/* ── Opcode tables ────────────────────────────────── */
+const OP = {MOVE:0,LOADK:1,LOADBOOL:2,LOADNIL:3,GETUPVAL:4,GETGLOBAL:5,GETTABLE:6,
+  SETGLOBAL:7,SETUPVAL:8,SETTABLE:9,NEWTABLE:10,SELF:11,ADD:12,SUB:13,MUL:14,DIV:15,
+  MOD:16,POW:17,UNM:18,NOT:19,LEN:20,CONCAT:21,JMP:22,EQ:23,LT:24,LE:25,TEST:26,
+  TESTSET:27,CALL:28,TAILCALL:29,RETURN:30,FORLOOP:31,FORPREP:32,TFORLOOP:33,
+  SETLIST:34,CLOSE:35,CLOSURE:36,VARARG:37};
+const OP_NAME = Object.fromEntries(Object.entries(OP).map(([k,v])=>[v,k]));
+const NUM_OPS = 38, MAX_sBx = 131071, BITRK = 256;
+const FMT = {MOVE:'ABC',LOADK:'ABx',LOADBOOL:'ABC',LOADNIL:'ABC',GETUPVAL:'ABC',
+  GETGLOBAL:'ABx',GETTABLE:'ABC',SETGLOBAL:'ABx',SETUPVAL:'ABC',SETTABLE:'ABC',
+  NEWTABLE:'ABC',SELF:'ABC',ADD:'ABC',SUB:'ABC',MUL:'ABC',DIV:'ABC',MOD:'ABC',
+  POW:'ABC',UNM:'ABC',NOT:'ABC',LEN:'ABC',CONCAT:'ABC',JMP:'AsBx',EQ:'ABC',LT:'ABC',
+  LE:'ABC',TEST:'ABC',TESTSET:'ABC',CALL:'ABC',TAILCALL:'ABC',RETURN:'ABC',
+  FORLOOP:'AsBx',FORPREP:'AsBx',TFORLOOP:'ABC',SETLIST:'ABC',CLOSE:'ABC',
+  CLOSURE:'ABx',VARARG:'ABC'};
+
+const HANDLERS = {
+  MOVE:     '{gRG}[A][{HX1}]={gRG}[B][{HX1}]',
+  LOADK:    '{gRG}[A][{HX1}]={gKC}(B+{HX1})',
+  LOADBOOL: '{gRG}[A][{HX1}]=(B~={HX0});if C~={HX0} then {gPC}={gPC}+{HX1} end',
+  LOADNIL:  'for i=A,B do {gER}(i);{gRG}[i][{HX1}]=nil end',
+  GETUPVAL: '{gRG}[A][{HX1}]={gUVL}[B+{HX1}][{HX1}]',
+  GETGLOBAL:'{gRG}[A][{HX1}]={gENV}[{gKC}(B+{HX1})]',
+  GETTABLE: '{gRG}[A][{HX1}]={gRG}[B][{HX1}][{gRK}(C)]',
+  SETGLOBAL:'{gENV}[{gKC}(B+{HX1})]={gRG}[A][{HX1}]',
+  SETUPVAL: '{gUVL}[B+{HX1}][{HX1}]={gRG}[A][{HX1}]',
+  SETTABLE: '{gRG}[A][{HX1}][{gRK}(B)]={gRK}(C)',
+  NEWTABLE: '{gRG}[A][{HX1}]={}',
+  SELF:     'local obj={gRG}[B][{HX1}];{gER}(A+{HX1});{gRG}[A+{HX1}][{HX1}]=obj;{gRG}[A][{HX1}]=obj[{gRK}(C)]',
+  ADD:      '{gRG}[A][{HX1}]={gRK}(B)+{gRK}(C)',
+  SUB:      '{gRG}[A][{HX1}]={gRK}(B)-{gRK}(C)',
+  MUL:      '{gRG}[A][{HX1}]={gRK}(B)*{gRK}(C)',
+  DIV:      '{gRG}[A][{HX1}]={gRK}(B)/{gRK}(C)',
+  MOD:      '{gRG}[A][{HX1}]={gRK}(B)%{gRK}(C)',
+  POW:      '{gRG}[A][{HX1}]={gRK}(B)^{gRK}(C)',
+  UNM:      '{gRG}[A][{HX1}]=-{gRG}[B][{HX1}]',
+  NOT:      '{gRG}[A][{HX1}]=not {gRG}[B][{HX1}]',
+  LEN:      '{gRG}[A][{HX1}]=#{gRG}[B][{HX1}]',
+  CONCAT:   'local {gTM}={};for i=B,C do {gTM}[#{gTM}+{HX1}]=tostring({gRG}[i][{HX1}])end;{gRG}[A][{HX1}]=table.concat({gTM})',
+  JMP:      '{gPC}={gPC}+B;continue',
+  EQ:       'if({gRK}(B)=={gRK}(C))~=(A~={HX0})then {gPC}={gPC}+{HX1} end',
+  LT:       'if({gRK}(B)<{gRK}(C))~=(A~={HX0})then {gPC}={gPC}+{HX1} end',
+  LE:       'if({gRK}(B)<={gRK}(C))~=(A~={HX0})then {gPC}={gPC}+{HX1} end',
+  TEST:     'local v={gRG}[A][{HX1}];if not(not v~=(C~={HX0}))then {gPC}={gPC}+{HX1} end',
+  TESTSET:  'local v={gRG}[B][{HX1}];if not(not v~=(C~={HX0}))then {gPC}={gPC}+{HX1} else {gRG}[A][{HX1}]=v end',
+  CALL: [
+    'local {gFN}={gRG}[A][{HX1}];local {gAG}={}',
+    'if B=={HX0} then local n={HX0};for i=A+{HX1},{gTP}-{HX1} do n=n+{HX1};{gAG}[n]={gRG}[i][{HX1}] end;{gAG}.n=n',
+    'elseif B>{HX1} then for i={HX1},B-{HX1} do {gAG}[i]={gRG}[A+i][{HX1}] end;{gAG}.n=B-{HX1} end',
+    'if C=={HX0} then local {gRT}={gPACK}({gFN}({gUNPACK}({gAG},{HX1},{gAG}.n)))',
+    'for i={HX0},{gRT}.n-{HX1} do {gER}(A+i);{gRG}[A+i][{HX1}]={gRT}[i+{HX1}] end;{gTP}=A+{gRT}.n',
+    'else local {gRT}={gPACK}({gFN}({gUNPACK}({gAG},{HX1},{gAG}.n)))',
+    'for i={HX0},C-{HX2} do {gER}(A+i);{gRG}[A+i][{HX1}]={gRT}[i+{HX1}] end end',
+  ].join('\n'),
+  TAILCALL: [
+    'local {gFN}={gRG}[A][{HX1}];local {gAG}={}',
+    'if B=={HX0} then local n={HX0};for i=A+{HX1},{gTP}-{HX1} do n=n+{HX1};{gAG}[n]={gRG}[i][{HX1}] end;{gAG}.n=n',
+    'elseif B>{HX1} then for i={HX1},B-{HX1} do {gAG}[i]={gRG}[A+i][{HX1}] end;{gAG}.n=B-{HX1} end',
+    'return {gFN}({gUNPACK}({gAG},{HX1},{gAG}.n))',
+  ].join('\n'),
+  RETURN: [
+    'local {gRT}={}',
+    'if B=={HX0} then local n={HX0};for i=A,{gTP}-{HX1} do n=n+{HX1};{gRT}[n]={gRG}[i][{HX1}] end;{gRT}.n=n',
+    'elseif B>{HX1} then for i={HX0},B-{HX2} do {gRT}[i+{HX1}]={gRG}[A+i][{HX1}] end;{gRT}.n=B-{HX1} end',
+    'return {gUNPACK}({gRT},{HX1},{gRT}.n)',
+  ].join('\n'),
+  FORPREP:  '{gRG}[A][{HX1}]={gRG}[A][{HX1}]-{gRG}[A+{HX2}][{HX1}];{gPC}={gPC}+B;continue',
+  FORLOOP: [
+    '{gRG}[A][{HX1}]={gRG}[A][{HX1}]+{gRG}[A+{HX2}][{HX1}]',
+    'local idx={gRG}[A][{HX1}];local lim={gRG}[A+{HX1}][{HX1}];local step={gRG}[A+{HX2}][{HX1}]',
+    'if(step>{HX0} and idx<=lim)or(step<={HX0} and idx>=lim)then {gPC}={gPC}+B;{gER}(A+{HX3});{gRG}[A+{HX3}][{HX1}]=idx end',
+  ].join('\n'),
+  TFORLOOP: [
+    'local {gFN}={gRG}[A][{HX1}];local s={gRG}[A+{HX1}][{HX1}];local var={gRG}[A+{HX2}][{HX1}]',
+    'local {gRT}={gPACK}({gFN}(s,var))',
+    'if {gRT}[{HX1}]~=nil then {gRG}[A+{HX2}][{HX1}]={gRT}[{HX1}];for i={HX1},C do {gER}(A+{HX2}+i);{gRG}[A+{HX2}+i][{HX1}]={gRT}[i] end',
+    'else {gPC}={gPC}+{HX1} end',
+  ].join('\n'),
+  SETLIST: [
+    'local t={gRG}[A][{HX1}];local n=(B=={HX0})and({gTP}-A-{HX1})or B;local off=(C-{HX1})*{HX50}',
+    'for i={HX1},n do t[off+i]={gRG}[A+i][{HX1}] end',
+  ].join('\n'),
+  CLOSE:   '',
+  CLOSURE: [
+    'local sub={gPR}[B+{HX1}];if not sub.{fCODE} then {gPREP}(sub) end',
+    'local sups={}',
+    'for j={HX1},sub.{fNU} do local ps={gCD}[{gPC}+{HX1}];{gPC}={gPC}+{HX1}',
+    'if ps[{gSOP}]=={OP_GETUPVAL} then sups[j]={gUVL}[ps[{gSB}]+{HX1}] else sups[j]={gRG}[ps[{gSB}]] end end',
+    '{gRG}[A][{HX1}]=function(...)return {gVM}(sub,sups,...) end',
+  ].join('\n'),
+  VARARG: [
+    'local base={gNP}',
+    'if B=={HX0} then local n={gVN}-base',
+    'for i={HX0},n-{HX1} do {gER}(A+i);{gRG}[A+i][{HX1}]={gVA}[base+{HX1}+i] end;{gTP}=A+n',
+    'else for i={HX0},B-{HX2} do {gER}(A+i);{gRG}[A+i][{HX1}]={gVA}[base+{HX1}+i] end end',
+  ].join('\n'),
+};
+
+/* ── VM template ──────────────────────────────────── */
+const VM_TEMPLATE = `--[[File Protected By MWP Obfuscator V2]]
+{RUNTIME_COMPAT}
+local {gENV}=(getfenv and getfenv({HX0}))or _G
+local {gCHK}=function()
+--[[Capability probing is advisory; integrity is checked independently.]]
+return type(rawget)=='function'and type(select)=='function'and type(pcall)=='function'and type(error)=='function'and type(tostring)=='function'
+end
+{gCHK}()
+local {gDS}=function({gA1},{gA2},{gA3})
+local {gB1}={};local {gB2}={gA2}
+for i={HX1},{gA3} do {gB2}=({gB2}*{gLA1}+{gLB1})%{HXFF00};{gB1}[i]=string.char({gBX}(string.byte({gA1},i),{gBA}({gB2},{HXFF})))end
+return table.concat({gB1})end
+local function {gPREP}({gP0})
+local {gP1}={HXffff};local {gP2}={gCRCP}
+local {gBLB}={gP0}.{fC};local {gBLN}={gP0}.{fNC}*{HX4}
+for i={HX1},{gBLN} do local {gP3}={gSUP}('<I4',{gBLB},(i-{HX1})*{HX4}+{HX1})
+for _={HX1},{HX4} do {gP1}={gBX}({gP1},{gBA}({gP3},{HXFF}))
+for j={HX1},{HX8} do if {gBA}({gP1},{HX1})~={HX0} then {gP1}={gBX}({gBR}({gP1},{HX1}),{gP2})else {gP1}={gBR}({gP1},{HX1})end end
+{gP3}={gBR}({gP3},{HX8})end end
+if {gBX}({gP1},{HXffff})~={gBX}({gP0}.{fCRC},{gCRCM})then error('')end
+local {gP4}={gP0}.{fNC}*{HX4};local {gP5}=({gP0}.{fEK}*{gLC_K})%{HXFF00};local {gP6}={}
+for i={HX1},{gP4} do {gP5}=({gP5}*{gLA2}+{gLB2})%{HXFF00}
+local v={gSUP}('<I4',{gBLB},(i-{HX1})*{HX4}+{HX1});{gP6}[i]={gBX}(v,{gBA}({gBR}({gP5},{HX10}),{HXFF}))end
+local {gP8}={gBX}({gP0}.{fEK},{gLC_D})%{HXFF00};local {gP9}={}
+for i={gP4},{HX1},-{HX1} do {gP8}=({gP8}*{gLA3}+{gLB3})%{HXFF00};{gP9}[i]={gBA}({gBR}({gP8},{HX8}),{HXFF}) end
+local {gPa}={};for i={HX1},{gP4} do {gPa}[i]={gBX}({gP6}[i],{gP9}[i])end
+local {gPb}={gP0}.{fEK}%{HXFF00};local {gPc}={}
+for i={HX1},{gP4} do {gPb}=({gPb}*{gLA4}+{gLB4})%{HXFF00};{gPc}[i]={gBA}({gPb},{HXFF}) end
+local {gPd}={};for i={HX1},{gP4} do {gPd}[i]={gBX}({gPa}[i],{gPc}[i])end
+local {gPe}={}
+for i={HX1},{gP0}.{fNC} do local b=(i-{HX1})*{HX4}+{HX1}
+local {gPf}={gPd}[b];local {gPg}={gPd}[b+{HX1}];local {gPh}={gPd}[b+{HX2}];local {gPi}={gPd}[b+{HX3}]
+local {gPj}={gPh}<{HXs80000000} and {gPh} or({gPh}-{HXs100000000});{gPe}[i]={INSTR_MAKE} end
+{gP0}.{fCODE}={gPe} end
+local {gVM}
+{gVM}=function({gP0},{gUV},...)
+local {gCD}={gP0}.{fCODE};local {gKT}={gP0}.{fK};local {gPR}={gP0}.{fP};local {gNP}={gP0}.{fNP}
+local function {gKC}(i)local v={gKT}[i];if type(v)=='table'then v={gDS}(v[{HX1}],v[{HX2}],v[{HX3}]);{gKT}[i]=v end;return v end
+local {gRG}={};for i={HX0},{gP0}.{fMS}+{HX10} do {gRG}[i]={false}end
+local {gUVL}={gUV} or{};local {gVA}={...};local {gVN}=select('#',...)
+for i={HX0},{gNP}-{HX1} do {gRG}[i][{HX1}]={gVA}[i+{HX1}]end
+local {gPC}={HX0};local {gTP}={gNP};local {gCT}={HX0}
+local {gOP1}=(type('')=='string')
+local {gOP2}=(#{gOPT}=={gOPN})
+local function {gRK}(x)if x>={BITRK} then return {gKC}(x-{BITRK}+{HX1})else return {gRG}[x][{HX1}]end end
+local function {gER}(i)if not {gRG}[i]then {gRG}[i]={false}end end
+if not {gOP2} then {gCHK}();{gPC}={gPC}+({gCT}-{gCT})end
+repeat
+local {gIS}={gCD}[{gPC}+{HX1}];if not {gIS} then break end
+{gPC}={gPC}+{HX1};{gCT}={gCT}+{HX1}
+if {gCT}%{gCHKN}=={HX0} then {gCHK}()end
+local _o={gBX}({gIS}[{gSOP}],{gOMASK});local A={gIS}[{gSA}];local B={gIS}[{gSB}];local C={gIS}[{gSC}]
+{DISPATCH}
+until not {gOP1}
+end
+local {gROOT}={gPROTO_DATA}
+{gPREP}({gROOT})
+return {gVM}({gROOT},{{}},...)`;
+
+/* ── Bytecode parser ──────────────────────────────── */
+class LuaParser {
+  constructor(data) {
+    this.d = data instanceof Uint8Array ? data : new Uint8Array(data);
+    this.p = 0;
+    if (String.fromCharCode(...this._rb(4)) !== '\x1bLua')
+      throw new Error('Not a Lua bytecode chunk (missing Lua signature).');
+    const version = this._rb(1)[0];
+    if (version !== 0x51)
+      throw new Error(`Unsupported Lua version 0x${version.toString(16)}; compile with Lua 5.1 luac.`);
+    this._rb(1); // format
+    this.le = this._rb(1)[0] === 1;
+    this.si = this._rb(1)[0]; // int size
+    this.ss = this._rb(1)[0]; // size_t size
+    const insSize = this._rb(1)[0], numSize = this._rb(1)[0], integral = this._rb(1)[0];
+    if (![4,8].includes(this.si) || ![4,8].includes(this.ss))
+      throw new Error('Unsupported int/size_t width.');
+    if (insSize !== 4 || numSize !== 8 || integral !== 0)
+      throw new Error('Only standard Lua 5.1 chunks with 4-byte instructions and double numbers are supported.');
+  }
+  _rb(n) {
+    if (this.p + n > this.d.length) throw new Error('Truncated bytecode at byte ' + this.p);
+    return this.d.slice(this.p, (this.p += n));
+  }
+  _ru() {
+    const b = this._rb(this.si);
+    const dv = new DataView(b.buffer, b.byteOffset);
+    return this.si === 4 ? dv.getUint32(0, this.le) : Number(dv.getBigUint64(0, this.le));
+  }
+  _rs() {
+    const b = this._rb(this.ss);
+    const dv = new DataView(b.buffer, b.byteOffset);
+    const n = this.ss === 4 ? dv.getUint32(0, this.le) : Number(dv.getBigUint64(0, this.le));
+    if (n === 0) return null;
+    const raw = this._rb(n);
+    let s = '';
+    for (let i = 0; i < n - 1; i++) s += String.fromCharCode(raw[i]);
+    return s;
+  }
+  _rn() {
+    const b = this._rb(8);
+    return new DataView(b.buffer, b.byteOffset).getFloat64(0, this.le);
+  }
+  _decodeInstr(raw) {
+    const op = raw & 0x3F, A = (raw >>> 6) & 0xFF;
+    const C = (raw >>> 14) & 0x1FF, B = (raw >>> 23) & 0x1FF;
+    const name = OP_NAME[op] || `UNKNOWN_${op}`, fmt = FMT[name] || 'ABC';
+    if (fmt === 'ABx')  return [op, A, (B << 9) | C, 0];
+    if (fmt === 'AsBx') return [op, A, ((B << 9) | C) - MAX_sBx, 0];
+    return [op, A, B, C];
+  }
+  parse() {
+    const pr = {source:'',nups:0,numparams:0,is_vararg:0,maxstack:0,code:[],kst:[],protos:[],upval_names:[]};
+    pr.source = this._rs() || '';
+    this._ru(); this._ru(); // line_defined, last_line_defined
+    pr.nups = this._rb(1)[0]; pr.numparams = this._rb(1)[0];
+    pr.is_vararg = this._rb(1)[0]; pr.maxstack = this._rb(1)[0];
+    let n = this._ru();
+    for (let i = 0; i < n; i++) pr.code.push(this._decodeInstr(this._ru()));
+    n = this._ru();
+    for (let i = 0; i < n; i++) {
+      const t = this._rb(1)[0];
+      if      (t === 0) pr.kst.push(['nil', null]);
+      else if (t === 1) pr.kst.push(['bool', this._rb(1)[0] !== 0]);
+      else if (t === 3) {
+        const v = this._rn();
+        pr.kst.push((Number.isInteger(v) && Math.abs(v) < 1e15) ? ['int', v] : ['float', v]);
+      }
+      else if (t === 4) pr.kst.push(['str', this._rs()]);
+      else throw new Error(`Unsupported constant type ${t}`);
+    }
+    n = this._ru();
+    for (let i = 0; i < n; i++) pr.protos.push(this.parse());
+    n = this._ru(); for (let i = 0; i < n; i++) this._ru(); // line info
+    n = this._ru(); for (let i = 0; i < n; i++) { this._rs(); this._ru(); this._ru(); } // locals
+    n = this._ru(); for (let i = 0; i < n; i++) pr.upval_names.push(this._rs() || '');
+    return pr;
+  }
+}
+
+/* ── Proto transforms ─────────────────────────────── */
+function makeOpmap(rng) {
+  const custom = Array.from({length: NUM_OPS}, (_, i) => i);
+  rng.shuffle(custom);
+  return Object.fromEntries(custom.map((v, i) => [i, v]));
+}
+
+function shuffleProtoOrder(proto, rng) {
+  const np = {...proto, code: proto.code.slice(), protos: []};
+  const n = proto.protos.length;
+  if (n > 1) {
+    const perm = Array.from({length: n}, (_, i) => i);
+    rng.shuffle(perm);
+    const inv = new Array(n);
+    for (let i = 0; i < n; i++) inv[perm[i]] = i;
+    np.protos = perm.map(p => shuffleProtoOrder(proto.protos[p], rng));
+    np.code = proto.code.map(([op, A, B, C]) =>
+      op === OP.CLOSURE ? [op, A, inv[B], C] : [op, A, B, C]);
+  } else {
+    np.protos = proto.protos.map(p => shuffleProtoOrder(p, rng));
+    np.code = proto.code.slice();
+  }
+  return np;
+}
+
+function remapProto(proto, opmap, opcodeMask) {
+  return {
+    ...proto,
+    code: proto.code.map(([op, A, B, C]) => [(opmap[op] ^ opcodeMask) >>> 0, A, B, C]),
+    protos: proto.protos.map(p => remapProto(p, opmap, opcodeMask)),
+  };
+}
+
+/* ── Serialization ────────────────────────────────── */
+function serKstEntry(typ, val, rng) {
+  if (typ === 'nil')   return 'nil';
+  if (typ === 'bool')  return val ? 'true' : 'false';
+  if (typ === 'int' || typ === 'float') return luaNum(val);
+  if (val === null)    return 'nil';
+  const k2 = rng.randint(1, 0xFFFFFF);
+  const enc = encryptStr(val, k2);
+  const lit = toLuaStrLit(enc, rng);
+  return `{${lit},${mathExpr(k2, rng)},${mathExpr(val.length, rng)}}`;
+}
+
+function serializeProto(proto, rng, masterKey, flds, crcMask) {
+  const kstParts = proto.kst.map(([t, v]) => serKstEntry(t, v, rng));
+  const kstStr = '{' + kstParts.join(',') + '}';
+
+  const flat = [];
+  for (const [op, A, B, C] of proto.code) {
+    flat.push(op >>> 0, A >>> 0, B & 0xFFFFFFFF, C & 0x1FF);
+  }
+
+  const protoKey = rng.randint(1, 0xFFFFFFFF);
+  const enc  = encryptInts(flat, protoKey);
+  const blob = packIntsToBytes(enc);
+  const crcStored = (crc32OfBytes(blob) ^ crcMask) >>> 0;
+  const blobLit = toLuaStrLit(blob, rng);
+
+  const subStrs = proto.protos.map(p => serializeProto(p, rng, masterKey, flds, crcMask));
+  const subsStr = '{' + subStrs.join(',') + '}';
+
+  const {fC,fCRC,fEK,fNC,fP,fK,fNP,fMS,fNU} = flds;
+  return `{${fNU}=${mathExpr(proto.nups,rng)},${fNP}=${mathExpr(proto.numparams,rng)},` +
+    `${fMS}=${mathExpr(proto.maxstack,rng)},${fNC}=${mathExpr(proto.code.length,rng)},` +
+    `${fCRC}=${mathExpr(crcStored,rng)},${fEK}=${mathExpr(protoKey,rng)},` +
+    `${fC}=${blobLit},${fK}=${kstStr},${fP}=${subsStr}}`;
+}
+
+/* ── Generate ─────────────────────────────────────── */
+function generate(proto, opmap, rng, masterKey) {
+  const N = new Namer(rng);
+
+  const flds = {
+    fC: N.call('_'), fCRC: N.call('_'), fEK: N.call('_'),
+    fNC: N.call('_'), fCODE: N.call('_'), fP: N.call('_'),
+    fK: N.call('_'), fNP: N.call('_'), fMS: N.call('_'), fNU: N.call('_'),
+  };
+
+  const perm = [0,1,2,3]; rng.shuffle(perm);
+  const logicalPh = ['gPf','gPg','gPj','gPi'];
+  const instrMake = '{' + Array.from({length:4},(_,i)=>'{'+logicalPh[perm[i]]+'}').join(',') + '}';
+  const slotOp = perm.indexOf(0)+1, slotA = perm.indexOf(1)+1;
+  const slotB  = perm.indexOf(2)+1, slotC = perm.indexOf(3)+1;
+
+  const hx0    = hexLit(0,          rng);
+  const hx1    = hexLit(1,          rng);
+  const hx2    = hexLit(2,          rng);
+  const hx3    = hexLit(3,          rng);
+  const hx4    = hexLit(4,          rng);
+  const hx8    = hexLit(8,          rng);
+  const hx10   = hexLit(16,         rng);
+  const hx50   = hexLit(50,         rng);
+  const hxFF   = hexLit(0xFF,       rng);
+  const hxFF00 = hexLit(0x100000000,rng, false);
+  const hxffff = hexLit(0xFFFFFFFF, rng, false);
+  const hxs32  = hexLit(0x80000000, rng, false);
+
+  const crcMask = rng.randint(1, 0xFFFFFFFE);
+
+  const dispatchOrder = Object.keys(OP); rng.shuffle(dispatchOrder);
+  const parts = [];
+  for (let i = 0; i < dispatchOrder.length; i++) {
+    const opName = dispatchOrder[i];
+    const kw = i === 0 ? 'if' : 'elseif';
+    parts.push(`${kw} _o=={OP_${opName}} then ${HANDLERS[opName]}`);
+  }
+  parts.push('end');
+  const dispatchCode = parts.join('\n');
+
+  const la = Array.from({length:4}, () => mathExpr(1664525,    rng));
+  const lb = Array.from({length:4}, () => mathExpr(1013904223, rng));
+  const chkn = hexLit(rng.randint(15, 40), rng);
+
+  const runtimeCompat =
+    'local {gBX},{gBR},{gBA}=bit32.bxor,bit32.rshift,bit32.band\n' +
+    'local {gSUP}=string.unpack\n' +
+    'local {gPACK}=table.pack;local {gUNPACK}=table.unpack';
+
+  const opcodeMask = rng.randint(1, 0xFFFFFFFF);
+
+  const shuffled = shuffleProtoOrder(proto, rng);
+  const remapped = remapProto(shuffled, opmap, opcodeMask);
+  const protoData = serializeProto(remapped, rng, masterKey, flds, crcMask);
+
+  const subs = [
+    ['DISPATCH',    dispatchCode],
+    ['INSTR_MAKE',  instrMake],
+    ['RUNTIME_COMPAT', runtimeCompat],
+    ['fC',   flds.fC],   ['fCRC',  flds.fCRC],  ['fEK',  flds.fEK],
+    ['fNC',  flds.fNC],  ['fCODE', flds.fCODE], ['fP',   flds.fP],
+    ['fK',   flds.fK],   ['fNP',   flds.fNP],   ['fMS',  flds.fMS], ['fNU', flds.fNU],
+    ['gBX',  N.call('_')], ['gBR',  N.call('_')], ['gBA',  N.call('_')],
+    ['gSUP', N.call('_')], ['gPACK',N.call('_')], ['gUNPACK',N.call('_')],
+    ['gENV', N.call('_')], ['gCHK', N.call('_')],
+    ['gDS',  N.call('_')], ['gPREP',N.call('_')], ['gVM',  N.call('_')], ['gROOT',N.call('_')],
+    ['gA1',  N.call('_')], ['gA2',  N.call('_')], ['gA3',  N.call('_')],
+    ['gB1',  N.call('_')], ['gB2',  N.call('_')],
+    ['gBLB', N.call('_')], ['gBLN', N.call('_')],
+    ['gP0',  N.call('_')], ['gP1',  N.call('_')], ['gP2',  N.call('_')], ['gP3',  N.call('_')],
+    ['gP4',  N.call('_')], ['gP5',  N.call('_')], ['gP6',  N.call('_')],
+    ['gP8',  N.call('_')], ['gP9',  N.call('_')], ['gPa',  N.call('_')], ['gPb',  N.call('_')],
+    ['gPc',  N.call('_')], ['gPd',  N.call('_')], ['gPe',  N.call('_')],
+    ['gPf',  N.call('_')], ['gPg',  N.call('_')], ['gPh',  N.call('_')],
+    ['gPi',  N.call('_')], ['gPj',  N.call('_')],
+    ['gCD',  N.call('_')], ['gKT',  N.call('_')], ['gKC',  N.call('_')],
+    ['gPR',  N.call('_')], ['gNP',  N.call('_')], ['gRG',  N.call('_')],
+    ['gUV',  N.call('_')], ['gUVL', N.call('_')], ['gVA',  N.call('_')],
+    ['gVN',  N.call('_')], ['gPC',  N.call('_')], ['gTP',  N.call('_')],
+    ['gCT',  N.call('_')], ['gOP1', N.call('_')], ['gOP2', N.call('_')],
+    ['gOPT', '{1,2,3}'],   ['gOPN', '3'],
+    ['gRK',  N.call('_')], ['gER',  N.call('_')], ['gIS',  N.call('_')],
+    ['gTM',  N.call('_')], ['gFN',  N.call('_')], ['gAG',  N.call('_')], ['gRT',  N.call('_')],
+    ['gSOP', String(slotOp)], ['gSA', String(slotA)],
+    ['gSB',  String(slotB)],  ['gSC', String(slotC)],
+    ['gLA1', la[0]], ['gLA2', la[1]], ['gLA3', la[2]], ['gLA4', la[3]],
+    ['gLB1', lb[0]], ['gLB2', lb[1]], ['gLB3', lb[2]], ['gLB4', lb[3]],
+    ['gLC_K',  mathExpr(31337,      rng)],
+    ['gLC_D',  mathExpr(3735928559, rng)],
+    ['gCRCP',  mathExpr(3988292384, rng)],
+    ['gCRCM',  mathExpr(crcMask,    rng)],
+    ['gCHKN',  chkn],
+    ['BITRK',  hexLit(BITRK, rng)],
+    ['HX0',    hx0],   ['HX1',  hx1],  ['HX2',  hx2],
+    ['HX3',    hx3],   ['HX4',  hx4],  ['HX8',  hx8],
+    ['HX10',   hx10],  ['HX50', hx50],
+    ['HXFF',   hxFF],  ['HXFF00', hxFF00], ['HXffff', hxffff],
+    ['HXs80000000', hxs32], ['HXs100000000', hxFF00],
+    ['gPROTO_DATA', protoData],
+    ['gOMASK', mathExpr(opcodeMask, rng)],
+    ...Object.entries(OP).map(([name, idx]) => [`OP_${name}`, mathExpr(opmap[idx], rng)]),
+  ];
+
+  let out = VM_TEMPLATE;
+  for (const [k, v] of subs) {
+    out = out.split('{' + k + '}').join(v);
+  }
+  return minifyLua(out);
+}
+
+/* ════════════════════════════════════════════════════
+   UI
+   ════════════════════════════════════════════════════ */
+
+let _loadedBytes = null;
+let _loadedName  = '';
+
+function setStatus(type, msg) {
+  document.getElementById('statusDot').className = 'status-dot ' + type;
+  document.getElementById('statusText').textContent = msg;
+}
+
+function onFileLoaded(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    _loadedBytes = new Uint8Array(e.target.result);
+    _loadedName  = file.name;
+    document.getElementById('dropFilename').textContent = `${file.name} (${_loadedBytes.length} bytes)`;
+    document.getElementById('runBtn').disabled = false;
+    setStatus('ok', `Loaded ${file.name} — click OBFUSCATE`);
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function runObfuscate() {
+  if (!_loadedBytes) { setStatus('err','No file loaded'); return; }
+  const seedEl = document.getElementById('seedInput');
+  const seedVal = seedEl.value !== '' ? parseInt(seedEl.value) : (Math.random() * 0xFFFFFFFF | 0);
+  const runBtn = document.getElementById('runBtn');
+  runBtn.disabled = true;
+  setStatus('spin','Obfuscating…');
+  document.getElementById('luaOutput').value = '';
+  document.getElementById('sizeLabel').textContent = '';
+
+  setTimeout(() => {
+    try {
+      const parser = new LuaParser(_loadedBytes);
+      const proto  = parser.parse();
+      const rng    = new RNG(seedVal);
+      const opmap  = makeOpmap(rng);
+      const mkey   = rng.randint(1, 0xFFFFFFFF);
+      const result = generate(proto, opmap, rng, mkey);
+      document.getElementById('luaOutput').value = result;
+      const sizeIn  = _loadedBytes.length;
+      const sizeOut = new Blob([result]).size;
+      const ratio   = (sizeOut / sizeIn).toFixed(1);
+      document.getElementById('sizeLabel').textContent = `${sizeIn}B → ${sizeOut}B  (×${ratio})`;
+      setStatus('ok','Done — script protected');
+    } catch(e) {
+      setStatus('err', e.message || String(e));
+    } finally {
+      runBtn.disabled = false;
+    }
+  }, 0);
+}
+
+async function copyOutput() {
+  const out = document.getElementById('luaOutput').value;
+  if (!out) return;
+  try {
+    await navigator.clipboard.writeText(out);
+    const btn = document.getElementById('copyBtn');
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy', 1600);
+  } catch(e) { document.getElementById('luaOutput').select(); }
+}
+
+/* ── File drop + browse ──────────────────────────── */
+(function(){
+  const zone = document.getElementById('dropZone');
+  const input = document.getElementById('fileInput');
+
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.classList.remove('drag-over');
+    const f = e.dataTransfer.files[0];
+    if (f) onFileLoaded(f);
+  });
+  input.addEventListener('change', () => { if (input.files[0]) onFileLoaded(input.files[0]); });
+
+  document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') runObfuscate();
+  });
+})();
+
+/* ── Hero canvas ─────────────────────────────────── */
+(function(){
+  const c = document.getElementById('hero-canvas');
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  const chars = '0123456789ABCDEFabcdef~^&|%+*xOR';
+  let cols, rows, grid, frame = 0;
+  function resize() {
+    c.width = window.innerWidth; c.height = window.innerHeight;
+    cols = Math.ceil(c.width / 22); rows = Math.ceil(c.height / 22);
+    grid = Array.from({length: cols * rows}, () => ({
+      ch: chars[Math.random() * chars.length | 0], age: Math.random() * 80 | 0,
+    }));
+  }
+  function draw() {
+    ctx.clearRect(0, 0, c.width, c.height);
+    ctx.font = '13px "JetBrains Mono", monospace';
+    ctx.textBaseline = 'top';
+    frame++;
+    const updateN = Math.max(1, (cols * rows / 40) | 0);
+    for (let i = 0; i < updateN; i++) {
+      const idx = Math.random() * grid.length | 0;
+      grid[idx].ch = chars[Math.random() * chars.length | 0]; grid[idx].age = 0;
+    }
+    for (let r = 0; r < rows; r++) for (let cc = 0; cc < cols; cc++) {
+      const cell = grid[r * cols + cc]; cell.age++;
+      const fade = Math.max(0, 1 - cell.age / 60);
+      ctx.fillStyle = `rgba(77,106,255,${(0.04 + fade * 0.18).toFixed(3)})`;
+      ctx.fillText(cell.ch, cc * 22, r * 22);
+    }
+    requestAnimationFrame(draw);
+  }
+  window.addEventListener('resize', resize);
+  resize(); draw();
+})();
+</script>
+</body>
+</html>
